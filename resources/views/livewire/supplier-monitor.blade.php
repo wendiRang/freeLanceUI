@@ -309,67 +309,167 @@
 
                     {{-- Fares --}}
                     @if(!empty($flight['fares']))
-                    <div class="overflow-x-auto scrollbar-thin">
-                        <table class="w-full text-xs border-collapse">
-                            <thead>
-                                <tr class="bg-gray-800 text-gray-400">
-                                    <th class="text-left px-3 py-2">Cabin</th>
-                                    <th class="text-left px-3 py-2">Fare Basis</th>
-                                    <th class="text-left px-3 py-2">Currency</th>
-                                    <th class="text-right px-3 py-2">Base</th>
-                                    <th class="text-right px-3 py-2">Tax</th>
-                                    <th class="text-right px-3 py-2">Other</th>
-                                    <th class="text-right px-3 py-2">Total (ADT)</th>
-                                    @if(($runPayload['child'] ?? 0) > 0)
-                                    <th class="text-right px-3 py-2">Total (CHD)</th>
+                    <div class="space-y-3">
+                        @foreach($flight['fares'] as $fi => $fare)
+                        @php
+                            $adt = (int)($runPayload['adult']  ?? 1);
+                            $chd = (int)($runPayload['child']  ?? 0);
+                            $inf = (int)($runPayload['infant'] ?? 0);
+
+                            $fareCurrency = $fare['currency'] ?? '-';
+                            $meal    = collect($fare['benefit']['meal']    ?? [])->flatten()->filter(fn($v) => $v && $v !== '-')->first() ?? null;
+                            $baggage = $fare['adult']['baggage'] ?? null;
+                            $seat    = collect($fare['benefit']['seatSelection'] ?? [])->flatten()->filter(fn($v) => $v && $v !== '-')->first() ?? null;
+
+                            // Prices per pax type
+                            $adtBase  = $fare['adult']['price']['base']  ?? 0;
+                            $adtTax   = $fare['adult']['price']['tax']   ?? 0;
+                            $adtOther = $fare['adult']['price']['other'] ?? 0;
+                            $adtSub   = $adtBase + $adtTax + $adtOther;
+
+                            $chdBase  = $fare['child']['price']['base']  ?? null;
+                            $chdTax   = $fare['child']['price']['tax']   ?? null;
+                            $chdOther = $fare['child']['price']['other'] ?? null;
+                            $chdSub   = isset($fare['child']) ? ($chdBase + $chdTax + $chdOther) : null;
+
+                            $infBase  = $fare['infant']['price']['base']  ?? null;
+                            $infTax   = $fare['infant']['price']['tax']   ?? null;
+                            $infOther = $fare['infant']['price']['other'] ?? null;
+                            $infSub   = isset($fare['infant']) ? ($infBase + $infTax + $infOther) : null;
+
+                            $grandTotal = ($adtSub * $adt)
+                                        + ($chdSub !== null ? $chdSub * $chd : 0)
+                                        + ($infSub !== null ? $infSub * $inf : 0);
+
+                            // Per-leg fare info (index 0 = depart, index 1 = return)
+                            $dptCabins   = $fare['cabinClass'][0]   ?? [];
+                            $dptBasis    = $fare['fareBasis'][0]    ?? [];
+                            $dptClass    = $fare['fareClass'][0]    ?? [];
+                            $dptBooking  = $fare['bookingClass'][0] ?? [];
+                            $rtnCabins   = $fare['cabinClass'][1]   ?? [];
+                            $rtnBasis    = $fare['fareBasis'][1]    ?? [];
+                            $rtnClass    = $fare['fareClass'][1]    ?? [];
+                            $rtnBooking  = $fare['bookingClass'][1] ?? [];
+                        @endphp
+
+                        <div class="border border-gray-700/40 rounded-lg overflow-hidden text-xs">
+
+                            {{-- Fare header --}}
+                            <div class="bg-gray-800/60 px-4 py-2 flex items-center justify-between border-b border-gray-700/40">
+                                <span class="text-gray-400 font-semibold">Fare #{{ $fi + 1 }}</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="font-mono font-semibold text-yellow-300">{{ $fareCurrency }}</span>
+                                    <span class="{{ $meal ? 'text-green-400' : 'text-gray-600' }}">Meal: {{ $meal ? '✓' : '✗' }}</span>
+                                    <span class="text-gray-400">Baggage: {{ is_null($baggage) ? '-' : $baggage }}</span>
+                                    <span class="{{ $seat ? 'text-green-400' : 'text-gray-600' }}">Seat: {{ $seat ? '✓' : '✗' }}</span>
+                                </div>
+                            </div>
+
+                            {{-- Per-segment fare info (cabin / basis / class per leg) --}}
+                            <div class="px-4 py-3 border-b border-gray-700/40 space-y-2">
+
+                                {{-- Departure segments --}}
+                                @if(!empty($dptSegs))
+                                <div>
+                                    <span class="text-blue-400 font-semibold uppercase tracking-wider text-xs">Departure</span>
+                                    <div class="mt-1 space-y-1">
+                                        @foreach($dptSegs as $si => $seg)
+                                        <div class="flex items-center gap-4 text-gray-300">
+                                            <span class="font-mono text-blue-200 font-semibold w-16">{{ $seg['dptAirport'] ?? '?' }}→{{ $seg['arrAirport'] ?? '?' }}</span>
+                                            <span class="text-gray-500">Cabin: <span class="text-white capitalize">{{ $dptCabins[$si] ?? '-' }}</span></span>
+                                            <span class="text-gray-500">Fare Class: <span class="text-white font-mono">{{ $dptClass[$si] ?? '-' }}</span></span>
+                                            <span class="text-gray-500">Fare Basis: <span class="text-white font-mono">{{ $dptBasis[$si] ?? '-' }}</span></span>
+                                            <span class="text-gray-500">RBD: <span class="text-white font-mono">{{ $dptBooking[$si] ?? '-' }}</span></span>
+                                        </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                                @endif
+
+                                {{-- Return segments --}}
+                                @if(!empty($rtnSegs))
+                                <div>
+                                    <span class="text-purple-400 font-semibold uppercase tracking-wider text-xs">Return</span>
+                                    <div class="mt-1 space-y-1">
+                                        @foreach($rtnSegs as $si => $seg)
+                                        <div class="flex items-center gap-4 text-gray-300">
+                                            <span class="font-mono text-purple-200 font-semibold w-16">{{ $seg['dptAirport'] ?? '?' }}→{{ $seg['arrAirport'] ?? '?' }}</span>
+                                            <span class="text-gray-500">Cabin: <span class="text-white capitalize">{{ $rtnCabins[$si] ?? '-' }}</span></span>
+                                            <span class="text-gray-500">Fare Class: <span class="text-white font-mono">{{ $rtnClass[$si] ?? '-' }}</span></span>
+                                            <span class="text-gray-500">Fare Basis: <span class="text-white font-mono">{{ $rtnBasis[$si] ?? '-' }}</span></span>
+                                            <span class="text-gray-500">RBD: <span class="text-white font-mono">{{ $rtnBooking[$si] ?? '-' }}</span></span>
+                                        </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                                @endif
+                            </div>
+
+                            {{-- Pax breakdown table --}}
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-800/40 text-gray-500 uppercase tracking-wider">
+                                        <th class="text-left px-4 py-2">Pax</th>
+                                        <th class="text-right px-4 py-2">Base</th>
+                                        <th class="text-right px-4 py-2">Tax</th>
+                                        <th class="text-right px-4 py-2">Other</th>
+                                        <th class="text-right px-4 py-2">Subtotal / pax</th>
+                                        <th class="text-right px-4 py-2">× Count</th>
+                                        <th class="text-right px-4 py-2 text-gray-400">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{-- Adult --}}
+                                    <tr class="border-t border-gray-800/60">
+                                        <td class="px-4 py-2 text-white font-semibold">Adult</td>
+                                        <td class="px-4 py-2 text-right text-gray-300">{{ number_format($adtBase) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-400">{{ number_format($adtTax) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-400">{{ number_format($adtOther) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-200 font-semibold">{{ number_format($adtSub) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-500">× {{ $adt }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-green-400">{{ number_format($adtSub * $adt) }}</td>
+                                    </tr>
+
+                                    {{-- Child --}}
+                                    @if($chd > 0 && $chdSub !== null)
+                                    <tr class="border-t border-gray-800/60">
+                                        <td class="px-4 py-2 text-blue-300 font-semibold">Child</td>
+                                        <td class="px-4 py-2 text-right text-gray-300">{{ number_format($chdBase) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-400">{{ number_format($chdTax) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-400">{{ number_format($chdOther) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-200 font-semibold">{{ number_format($chdSub) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-500">× {{ $chd }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-blue-400">{{ number_format($chdSub * $chd) }}</td>
+                                    </tr>
                                     @endif
-                                    @if(($runPayload['infant'] ?? 0) > 0)
-                                    <th class="text-right px-3 py-2">Total (INF)</th>
+
+                                    {{-- Infant --}}
+                                    @if($inf > 0 && $infSub !== null)
+                                    <tr class="border-t border-gray-800/60">
+                                        <td class="px-4 py-2 text-purple-300 font-semibold">Infant</td>
+                                        <td class="px-4 py-2 text-right text-gray-300">{{ number_format($infBase) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-400">{{ number_format($infTax) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-400">{{ number_format($infOther) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-200 font-semibold">{{ number_format($infSub) }}</td>
+                                        <td class="px-4 py-2 text-right text-gray-500">× {{ $inf }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-purple-400">{{ number_format($infSub * $inf) }}</td>
+                                    </tr>
                                     @endif
-                                    <th class="text-center px-3 py-2">Meal</th>
-                                    <th class="text-center px-3 py-2">Baggage</th>
-                                    <th class="text-center px-3 py-2">Seat</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($flight['fares'] as $fare)
-                                @php
-                                    $cabin      = collect($fare['cabinClass'] ?? [])->map(fn($v) => is_array($v) ? implode('+', $v) : $v)->implode(' / ');
-                                    $fareBasis  = collect($fare['fareBasis'] ?? [])->map(fn($v) => is_array($v) ? implode('+', $v) : $v)->implode(' / ');
-                                    $base       = $fare['adult']['price']['base']  ?? 0;
-                                    $tax        = $fare['adult']['price']['tax']   ?? 0;
-                                    $other      = $fare['adult']['price']['other'] ?? 0;
-                                    $total      = $base + $tax + $other;
-                                    $childTotal  = isset($fare['child'])  ? array_sum($fare['child']['price']  ?? []) : null;
-                                    $infantTotal = isset($fare['infant']) ? array_sum($fare['infant']['price'] ?? []) : null;
-                                    $meal    = collect($fare['benefit']['meal']    ?? [])->flatten()->filter(fn($v) => $v && $v !== '-')->first() ?? null;
-                                    $baggage = $fare['adult']['baggage'] ?? null;
-                                    $seat    = collect($fare['benefit']['seatSelection'] ?? [])->flatten()->filter(fn($v) => $v && $v !== '-')->first() ?? null;
-                                    $fareCurrency = $fare['currency'] ?? '-';
-                                @endphp
-                                <tr class="border-t border-gray-800 hover:bg-gray-800/30">
-                                    <td class="px-3 py-2 text-gray-200 capitalize">{{ $cabin ?: '-' }}</td>
-                                    <td class="px-3 py-2 text-gray-400 font-mono">{{ $fareBasis ?: '-' }}</td>
-                                    <td class="px-3 py-2">
-                                        <span class="font-mono font-semibold text-yellow-300">{{ $fareCurrency }}</span>
-                                    </td>
-                                    <td class="px-3 py-2 text-right text-gray-200">{{ number_format($base) }}</td>
-                                    <td class="px-3 py-2 text-right text-gray-400">{{ number_format($tax) }}</td>
-                                    <td class="px-3 py-2 text-right text-gray-400">{{ number_format($other) }}</td>
-                                    <td class="px-3 py-2 text-right font-semibold text-green-400">{{ number_format($total) }}</td>
-                                    @if(($runPayload['child'] ?? 0) > 0)
-                                    <td class="px-3 py-2 text-right font-semibold text-blue-400">{{ $childTotal !== null ? number_format($childTotal) : '-' }}</td>
-                                    @endif
-                                    @if(($runPayload['infant'] ?? 0) > 0)
-                                    <td class="px-3 py-2 text-right font-semibold text-purple-400">{{ $infantTotal !== null ? number_format($infantTotal) : '-' }}</td>
-                                    @endif
-                                    <td class="px-3 py-2 text-center {{ $meal ? 'text-green-400' : 'text-gray-600' }}">{{ $meal ? '✓' : '✗' }}</td>
-                                    <td class="px-3 py-2 text-center text-gray-400">{{ is_null($baggage) ? '-' : $baggage }}</td>
-                                    <td class="px-3 py-2 text-center {{ $seat ? 'text-green-400' : 'text-gray-600' }}">{{ $seat ? '✓' : '✗' }}</td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+
+                                    {{-- Grand Total --}}
+                                    <tr class="border-t-2 border-gray-600 bg-gray-800/30">
+                                        <td colspan="6" class="px-4 py-2 text-right text-gray-400 font-semibold uppercase tracking-wider text-xs">
+                                            Grand Total ({{ $adt }} ADT{{ $chd > 0 ? ", {$chd} CHD" : '' }}{{ $inf > 0 ? ", {$inf} INF" : '' }})
+                                        </td>
+                                        <td class="px-4 py-2 text-right font-bold text-yellow-300 text-sm">
+                                            {{ $fareCurrency }} {{ number_format($grandTotal) }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                        </div>
+                        @endforeach
                     </div>
                     @endif
 
