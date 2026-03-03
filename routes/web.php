@@ -13,4 +13,4 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', \App\Livewire\SupplierMonitor::class);
+Route::get('/', fn() => view('monitor'));

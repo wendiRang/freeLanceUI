@@ -14,6 +14,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Class Map
+    |--------------------------------------------------------------------------
+    | Maps the "Class" field in payload.json to a supplier key below.
+    | Add a new entry here whenever you add a new airline class.
+    |
+    */
+    'class_map' => [
+        'VietJetAir' => 'vietjetair',  // must match "Class" value in payload.json exactly
+        'JejuAir'    => 'jejuair',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Suppliers
     |--------------------------------------------------------------------------
     | Each supplier maps to a node server route for oneway and roundtrip.
@@ -26,22 +39,11 @@ return [
             'oneway'    => '/vietjetair/puppeteer/oneway',
             'roundtrip' => '/vietjetair/puppeteer/roundtrip',
         ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Default Payload
-    |--------------------------------------------------------------------------
-    | Pre-filled values shown in the monitor form on load.
-    |
-    */
-    'default_payload' => [
-        'origin' => 'SGN',
-        'dest'   => 'HAN',
-        'adult'  => 1,
-        'child'  => 0,
-        'infant' => 0,
-        'proxy'  => null,
+        'jejuair' => [
+            'name'      => 'Jeju Air',
+            'oneway'    => '/jejuair/puppeteer/oneway',
+            'roundtrip' => '/jejuair/puppeteer/roundtrip',
+        ],
     ],
 
 ];
